@@ -1,3 +1,4 @@
+pub mod http;
 pub mod mock;
 
 use serde::{Deserialize, Serialize};
