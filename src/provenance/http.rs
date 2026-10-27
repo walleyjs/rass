@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
 use ed25519_dalek::{Signer, SigningKey};
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -8,6 +10,16 @@ use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};
 
 use super::{AttestationEnvelope, AttestedPayload, AttestedPayloadProvider, ProvenanceError};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscoveredEspnEvent {
+    pub event_id: String,
+    pub name: String,
+    pub short_name: String,
+    pub state: String,
+    pub completed: bool,
+    pub date: Option<String>,
+}
 
 #[derive(Clone, Debug)]
 struct CachedAttestation {
@@ -58,6 +70,82 @@ impl HttpAttestingProvider {
 
     pub fn public_key_bytes(&self) -> [u8; 32] {
         self.signing_key.verifying_key().to_bytes()
+    }
+
+    /// Queries the live ESPN scoreboard (`site.web.api.espn.com` -> `site.api.espn.com`) for a given
+    /// `sport_path` (e.g., `"soccer/eng.1"`, `"basketball/nba"`, `"football/nfl"`) and extracts real
+    /// active/upcoming/completed `event_id`s along with their metadata.
+    pub async fn discover_live_espn_events(
+        &self,
+        sport_path: &str,
+    ) -> Result<Vec<DiscoveredEspnEvent>, ProvenanceError> {
+        let endpoints = [
+            format!(
+                "https://site.web.api.espn.com/apis/site/v2/sports/{}/scoreboard",
+                sport_path
+            ),
+            format!(
+                "https://site.api.espn.com/apis/site/v2/sports/{}/scoreboard",
+                sport_path
+            ),
+        ];
+
+        let mut last_err =
+            ProvenanceError::NetworkError("No ESPN scoreboard endpoints attempted".into());
+        for url in &endpoints {
+            match self.fetch_attested(url).await {
+                Ok(attested) => {
+                    let parsed: Value = serde_json::from_slice(&attested.raw_bytes)
+                        .map_err(|e| ProvenanceError::NetworkError(format!("Invalid ESPN scoreboard JSON: {}", e)))?;
+                    let mut events = Vec::new();
+                    if let Some(arr) = parsed.get("events").and_then(|v| v.as_array()) {
+                        for ev in arr {
+                            let Some(event_id) = ev.get("id").and_then(|v| v.as_str()) else {
+                                continue;
+                            };
+                            let name = ev
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("Unknown Fixture")
+                                .to_string();
+                            let short_name = ev
+                                .get("shortName")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(&name)
+                                .to_string();
+                            let date = ev
+                                .get("date")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            let status_type = ev
+                                .get("status")
+                                .and_then(|s| s.get("type"));
+                            let state = status_type
+                                .and_then(|t| t.get("state"))
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("pre")
+                                .to_string();
+                            let completed = status_type
+                                .and_then(|t| t.get("completed"))
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false);
+
+                            events.push(DiscoveredEspnEvent {
+                                event_id: event_id.to_string(),
+                                name,
+                                short_name,
+                                state,
+                                completed,
+                                date,
+                            });
+                        }
+                    }
+                    return Ok(events);
+                }
+                Err(e) => last_err = e,
+            }
+        }
+        Err(last_err)
     }
 
     /// Fetches an ESPN summary payload with dual-domain failover (`site.web.api.espn.com` -> `site.api.espn.com`)
@@ -113,10 +201,18 @@ impl AttestedPayloadProvider for HttpAttestingProvider {
         }
 
         // 3. Execute live HTTPS request
-        let resp = self
+        let mut req_builder = self
             .client
             .get(url)
-            .header("Accept", "application/json, text/plain, */*")
+            .header("Accept", "application/json, text/plain, */*");
+
+        if url.contains("espn.com") {
+            req_builder = req_builder
+                .header("Origin", "https://www.espn.com")
+                .header("Referer", "https://www.espn.com/");
+        }
+
+        let resp = req_builder
             .send()
             .await
             .map_err(|e| ProvenanceError::NetworkError(e.to_string()))?;

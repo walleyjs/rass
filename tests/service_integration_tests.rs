@@ -19,7 +19,8 @@ use resolution_service::receipt::{
 use resolution_service::scheduler::ConfirmationStepResult;
 use resolution_service::server::{
     build_router, FinalizeMarketRequest, IngestFixtureSnapshotRequest,
-    IngestFixtureSnapshotResponse, LedgerAuditResponse, RaasEngine, RegisterFixtureMatrixRequest,
+    IngestFixtureSnapshotResponse, LedgerAuditResponse, MarketSummaryDto, RaasEngine,
+    RegisterFixtureMatrixRequest,
 };
 use resolution_service::sports::FixtureMarketMatrix;
 
@@ -530,7 +531,28 @@ async fn test_end_to_end_http_service_router_workflow() {
     assert_eq!(win_receipt.payout_numerators, [10_000, 0]);
     assert!(verify_onchain_receipt(&win_receipt).is_ok());
 
-    // 5. GET /v1/ledger/audit -> Verify full hash-chained ledger integrity
+    // 5. GET /v1/markets -> Verify market listing & receipt status
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/markets")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body_bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    let summaries: Vec<MarketSummaryDto> = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(summaries.len(), 10);
+    assert!(summaries
+        .iter()
+        .any(|m| m.market_id == "401696-arsenal-home-win" && m.has_receipt));
+
+    // 6. GET /v1/ledger/audit -> Verify full hash-chained ledger integrity
     let resp = app
         .oneshot(
             Request::builder()
