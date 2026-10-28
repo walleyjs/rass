@@ -95,8 +95,13 @@ impl HttpAttestingProvider {
         for url in &endpoints {
             match self.fetch_attested(url).await {
                 Ok(attested) => {
-                    let parsed: Value = serde_json::from_slice(&attested.raw_bytes)
-                        .map_err(|e| ProvenanceError::NetworkError(format!("Invalid ESPN scoreboard JSON: {}", e)))?;
+                    let parsed: Value =
+                        serde_json::from_slice(&attested.raw_bytes).map_err(|e| {
+                            ProvenanceError::NetworkError(format!(
+                                "Invalid ESPN scoreboard JSON: {}",
+                                e
+                            ))
+                        })?;
                     let mut events = Vec::new();
                     if let Some(arr) = parsed.get("events").and_then(|v| v.as_array()) {
                         for ev in arr {
@@ -117,9 +122,7 @@ impl HttpAttestingProvider {
                                 .get("date")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string());
-                            let status_type = ev
-                                .get("status")
-                                .and_then(|s| s.get("type"));
+                            let status_type = ev.get("status").and_then(|s| s.get("type"));
                             let state = status_type
                                 .and_then(|t| t.get("state"))
                                 .and_then(|v| v.as_str())
@@ -226,7 +229,13 @@ impl AttestedPayloadProvider for HttpAttestingProvider {
         }
 
         // 4. Extract canonical headers & server Date timestamp
-        let tracked_headers = ["content-type", "date", "etag", "last-modified", "cache-control"];
+        let tracked_headers = [
+            "content-type",
+            "date",
+            "etag",
+            "last-modified",
+            "cache-control",
+        ];
         let mut canonical_headers = Vec::new();
         let mut server_date_ts: Option<i64> = None;
 

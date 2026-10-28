@@ -64,7 +64,7 @@ impl MultiplexedFixtureResolutionReport {
         hasher.update(payload_commitment);
         for v in verdicts {
             hasher.update(v.market_id.as_bytes());
-            hasher.update(&[v.outcome_code]);
+            hasher.update([v.outcome_code]);
         }
         let digest = hasher.finalize();
         let mut out = [0u8; 32];
@@ -73,16 +73,9 @@ impl MultiplexedFixtureResolutionReport {
     }
 }
 
+#[derive(Default)]
 pub struct MultiplexedSportsResolver {
     pub config: SportsEvaluationConfig,
-}
-
-impl Default for MultiplexedSportsResolver {
-    fn default() -> Self {
-        Self {
-            config: SportsEvaluationConfig::default(),
-        }
-    }
 }
 
 impl MultiplexedSportsResolver {
@@ -138,11 +131,12 @@ impl MultiplexedSportsResolver {
             });
         }
 
-        let report_merkle_commitment = MultiplexedFixtureResolutionReport::compute_report_commitment(
-            &fixture.event_id,
-            &payload_commitment,
-            &verdicts,
-        );
+        let report_merkle_commitment =
+            MultiplexedFixtureResolutionReport::compute_report_commitment(
+                &fixture.event_id,
+                &payload_commitment,
+                &verdicts,
+            );
 
         Ok(MultiplexedFixtureResolutionReport {
             event_id: fixture.event_id,
@@ -176,7 +170,11 @@ impl MultiplexedSportsResolver {
             });
         }
 
-        for (actual, expected) in recomputed.verdicts.iter().zip(expected_report.verdicts.iter()) {
+        for (actual, expected) in recomputed
+            .verdicts
+            .iter()
+            .zip(expected_report.verdicts.iter())
+        {
             if actual != expected {
                 return Err(SportsResolutionError::VerdictMismatch {
                     market_id: expected.market_id.clone(),

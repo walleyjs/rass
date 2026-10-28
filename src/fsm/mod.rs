@@ -10,16 +10,12 @@ pub enum FsmError {
         to: String,
         reason: String,
     },
-    #[error("Challenge window still active: current time {current_time} < expires at {expires_at}")]
-    ChallengeWindowActive {
-        current_time: i64,
-        expires_at: i64,
-    },
+    #[error(
+        "Challenge window still active: current time {current_time} < expires at {expires_at}"
+    )]
+    ChallengeWindowActive { current_time: i64, expires_at: i64 },
     #[error("Challenge window expired: current time {current_time} > expires at {expires_at}")]
-    ChallengeWindowExpired {
-        current_time: i64,
-        expires_at: i64,
-    },
+    ChallengeWindowExpired { current_time: i64, expires_at: i64 },
     #[error("Insufficient bond: provided {provided} < required {required}")]
     InsufficientBond {
         provided: Decimal,
@@ -356,7 +352,12 @@ impl ResolutionFsm {
     }
 
     /// Emergency / Unresolvable Void transition
-    pub fn void_market(&mut self, void_code: u8, reason: String, current_time: i64) -> Result<(), FsmError> {
+    pub fn void_market(
+        &mut self,
+        void_code: u8,
+        reason: String,
+        current_time: i64,
+    ) -> Result<(), FsmError> {
         match &self.state {
             MarketLifecycleState::Finalized { .. } => Err(FsmError::InvalidTransition {
                 from: "Finalized".into(),

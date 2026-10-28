@@ -8,6 +8,12 @@ pub struct MockAttestationAuthority {
     pub signing_key: SigningKey,
 }
 
+impl Default for MockAttestationAuthority {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockAttestationAuthority {
     pub fn new() -> Self {
         let mut csprng = OsRng;

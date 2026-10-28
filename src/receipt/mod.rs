@@ -88,7 +88,7 @@ impl SettlementReceipt {
 
     pub fn receipt_hash(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
-        hasher.update(&self.to_wire_bytes());
+        hasher.update(self.to_wire_bytes());
         hasher.update(&self.oracle_signature);
         let digest = hasher.finalize();
         let mut out = [0u8; 32];

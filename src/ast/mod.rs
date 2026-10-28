@@ -75,10 +75,13 @@ impl Value {
     pub fn as_decimal(&self) -> Result<Decimal, AstError> {
         match self {
             Self::Decimal(d) => Ok(*d),
-            Self::Text(s) => s.trim().parse::<Decimal>().map_err(|e| AstError::DecimalParseError {
-                raw: s.clone(),
-                source: e,
-            }),
+            Self::Text(s) => s
+                .trim()
+                .parse::<Decimal>()
+                .map_err(|e| AstError::DecimalParseError {
+                    raw: s.clone(),
+                    source: e,
+                }),
             other => Err(AstError::TypeMismatch {
                 expected: "Decimal".into(),
                 found: other.type_name().into(),
@@ -222,7 +225,10 @@ impl Expression {
                     caps.get(*capture_group)
                         .map(|m| Value::Text(m.as_str().to_string()))
                         .ok_or_else(|| {
-                            AstError::RegexError(format!("Capture group {} not found", capture_group))
+                            AstError::RegexError(format!(
+                                "Capture group {} not found",
+                                capture_group
+                            ))
                         })
                 } else {
                     Err(AstError::RegexError(format!(
@@ -304,7 +310,7 @@ impl Expression {
                     }
                 }
 
-                counts.sort_by(|a, b| b.1.cmp(&a.1));
+                counts.sort_by_key(|a| std::cmp::Reverse(a.1));
                 let (winner_val, winner_count) = &counts[0];
 
                 let total_witnesses = Decimal::from(strategies.len() as u64);
@@ -440,21 +446,21 @@ impl Expression {
 
             if let Some((field, idx_str)) = part.split_once('[') {
                 if !field.is_empty() {
-                    curr = curr
-                        .get(field)
-                        .ok_or_else(|| AstError::JsonPathError(format!("Field '{}' not found", field)))?;
+                    curr = curr.get(field).ok_or_else(|| {
+                        AstError::JsonPathError(format!("Field '{}' not found", field))
+                    })?;
                 }
                 let idx: usize = idx_str
                     .trim_end_matches(']')
                     .parse()
                     .map_err(|_| AstError::JsonPathError(format!("Invalid index in '{}'", part)))?;
-                curr = curr
-                    .get(idx)
-                    .ok_or_else(|| AstError::JsonPathError(format!("Index {} not found in '{}'", idx, part)))?;
+                curr = curr.get(idx).ok_or_else(|| {
+                    AstError::JsonPathError(format!("Index {} not found in '{}'", idx, part))
+                })?;
             } else {
-                curr = curr
-                    .get(part)
-                    .ok_or_else(|| AstError::JsonPathError(format!("Field '{}' not found", part)))?;
+                curr = curr.get(part).ok_or_else(|| {
+                    AstError::JsonPathError(format!("Field '{}' not found", part))
+                })?;
             }
         }
 
@@ -483,15 +489,19 @@ impl Expression {
                 regex::escape(tag)
             )
         } else {
-            format!(r#"<{}\b[^>]*>([^<]*)</{}>"#, regex::escape(tag), regex::escape(tag))
+            format!(
+                r#"<{}\b[^>]*>([^<]*)</{}>"#,
+                regex::escape(tag),
+                regex::escape(tag)
+            )
         };
 
         let re = Regex::new(&pattern).map_err(|e| AstError::DomExtractionError(e.to_string()))?;
         if let Some(caps) = re.captures(html) {
             if let Some(target_attr) = target_attribute {
                 let attr_pat = format!(r#"{}="([^"]*)""#, regex::escape(target_attr));
-                let attr_re =
-                    Regex::new(&attr_pat).map_err(|e| AstError::DomExtractionError(e.to_string()))?;
+                let attr_re = Regex::new(&attr_pat)
+                    .map_err(|e| AstError::DomExtractionError(e.to_string()))?;
                 if let Some(c) = attr_re.captures(&caps[0]) {
                     return Ok(c[1].to_string());
                 }
@@ -543,9 +553,8 @@ impl Expression {
     fn search_schema_value(json: &JsonValue, target_type: &str, property: &str) -> Option<String> {
         match json {
             JsonValue::Object(map) => {
-                let is_type = map.get("@type").and_then(|t| t.as_str()).map_or(false, |t| {
-                    t.eq_ignore_ascii_case(target_type)
-                        || t.ends_with(&format!("/{}", target_type))
+                let is_type = map.get("@type").and_then(|t| t.as_str()).is_some_and(|t| {
+                    t.eq_ignore_ascii_case(target_type) || t.ends_with(&format!("/{}", target_type))
                 });
 
                 if is_type {

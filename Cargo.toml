@@ -2,6 +2,12 @@
 name = "resolution-service"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.75"
+description = "Verifiable Resolution-as-a-Service (RaaS) oracle and clearinghouse engine with cryptographic HTTP provenance, 128-bit fixed-point AST evaluation, multiplexed sports matrices, hash-chained audit ledgers, and 153-byte on-chain settlement receipts."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["oracle", "prediction-market", "cryptography", "ed25519", "settlement"]
+categories = ["cryptography", "finance", "web-programming::http-server"]
 
 [dependencies]
 axum = "0.7"

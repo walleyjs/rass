@@ -50,7 +50,7 @@ pub enum MarketBlueprint {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompiledMarketSpec {
     pub question: String,
     pub primary_source_url: String,
@@ -76,8 +76,14 @@ impl MarketBlueprint {
                     format!("{}USDT", sym_upper)
                 };
                 let base = pair.trim_end_matches("USDT");
-                let primary_url = format!("https://api.binance.com/api/v3/ticker/price?symbol={}", pair);
-                let secondary_url = format!("https://data-api.binance.vision/api/v3/ticker/price?symbol={}", pair);
+                let primary_url = format!(
+                    "https://api.binance.com/api/v3/ticker/price?symbol={}",
+                    pair
+                );
+                let secondary_url = format!(
+                    "https://data-api.binance.vision/api/v3/ticker/price?symbol={}",
+                    pair
+                );
 
                 let op_phrase = match operator {
                     ComparisonOperator::GreaterThan => "exceed",
@@ -117,7 +123,7 @@ impl MarketBlueprint {
 
                 let temporal = TemporalRules {
                     cutoff_time: cutoff_time.timestamp(),
-                    challenge_window_seconds: 1800, // 30 minutes
+                    challenge_window_seconds: 1800,  // 30 minutes
                     retroactive_freeze_seconds: 600, // 10 minutes
                 };
 
@@ -302,13 +308,14 @@ impl MarketBlueprint {
                     cutoff_time.format("%Y-%m-%d %H:%M")
                 );
 
-                let target_sv = crate::ast::ParsedSemVer::parse(target_version)
-                    .unwrap_or(crate::ast::ParsedSemVer {
+                let target_sv = crate::ast::ParsedSemVer::parse(target_version).unwrap_or(
+                    crate::ast::ParsedSemVer {
                         major: 0,
                         minor: 0,
                         patch: 0,
                         pre_release: None,
-                    });
+                    },
+                );
 
                 let ast = Expression::Compare {
                     op: *operator,

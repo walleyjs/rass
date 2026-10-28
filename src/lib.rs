@@ -1,5 +1,6 @@
 pub mod ast;
 pub mod blueprints;
+pub mod bundle;
 pub mod fsm;
 pub mod ledger;
 pub mod provenance;

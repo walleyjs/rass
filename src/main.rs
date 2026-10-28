@@ -1,6 +1,5 @@
 use chrono::{Duration as ChronoDuration, Utc};
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::str::FromStr;
@@ -8,49 +7,20 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use resolution_service::ast::ComparisonOperator;
-use resolution_service::blueprints::{CompiledMarketSpec, MarketBlueprint};
+use resolution_service::blueprints::MarketBlueprint;
+use resolution_service::bundle::{
+    build_deterministic_sample_canary_bundle, build_golden_vectors_v1, verify_canary_bundle,
+    GeneralCanaryEntry, LiveCanaryBundle, SportsCanaryEntry,
+};
 use resolution_service::fsm::MarketLifecycleState;
-use resolution_service::ledger::AuditLedger;
 use resolution_service::provenance::mock::MockAttestationAuthority;
 use resolution_service::provenance::{AttestedPayload, AttestedPayloadProvider};
-use resolution_service::receipt::{verify_onchain_receipt, SettlementReceipt};
+use resolution_service::receipt::SettlementReceipt;
 use resolution_service::server::{build_router, RaasEngine};
 use resolution_service::sports::{
-    FixtureMarketMatrix, MultiplexedFixtureResolutionReport, MultiplexedSportsResolver,
-    NormalizedFixtureState, SportsMarketTemplate,
+    FixtureMarketMatrix, MultiplexedSportsResolver, NormalizedFixtureState,
 };
-use resolution_service::verifier::{verify_resolution_offline, VerifiedResolutionReport};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GeneralCanaryEntry {
-    pub market_id: String,
-    pub spec: CompiledMarketSpec,
-    pub attestation: AttestedPayload,
-    pub report: VerifiedResolutionReport,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SportsCanaryEntry {
-    pub sport_path: String,
-    pub event_id: String,
-    pub fixture_title: String,
-    pub templates: Vec<SportsMarketTemplate>,
-    pub attestation: AttestedPayload,
-    pub report: MultiplexedFixtureResolutionReport,
-}
-
-/// Self-contained, air-gapped verification bundle capturing live HTTPS wire payloads,
-/// Ed25519 commitments, AST/Sports evaluation reports, 153-byte on-chain receipts,
-/// and the hash-chained AuditLedger.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LiveCanaryBundle {
-    pub generated_at: i64,
-    pub oracle_pubkey_hex: String,
-    pub general_markets: Vec<GeneralCanaryEntry>,
-    pub sports_fixture: Option<SportsCanaryEntry>,
-    pub receipts: Vec<SettlementReceipt>,
-    pub ledger: AuditLedger,
-}
+use resolution_service::verifier::verify_resolution_offline;
 
 #[tokio::main]
 async fn main() {
@@ -58,6 +28,13 @@ async fn main() {
     let subcommand = args.get(1).map(|s| s.as_str()).unwrap_or("demo");
 
     match subcommand {
+        "generate-vectors" => {
+            let dir = args.get(2).map(|s| s.as_str()).unwrap_or("vectors");
+            if let Err(e) = run_generate_vectors(dir) {
+                eprintln!("Failed to generate golden vectors: {}", e);
+                std::process::exit(1);
+            }
+        }
         "live-canary" => {
             let mut out_path = String::from("/tmp/live_canary.json");
             let mut i = 2;
@@ -156,7 +133,10 @@ async fn seed_engine_with_live_events(
 
     for (market_id, bp) in blueprints {
         let spec = engine.register_blueprint(market_id.clone(), bp, registered_at);
-        println!("  [Live Fetch] {} -> {}", market_id, spec.primary_source_url);
+        println!(
+            "  [Live Fetch] {} -> {}",
+            market_id, spec.primary_source_url
+        );
 
         let mut urls = vec![spec.primary_source_url.clone()];
         urls.extend(spec.secondary_source_urls.clone());
@@ -244,8 +224,7 @@ async fn seed_engine_with_live_events(
                     .await
                 {
                     Ok(attestation) => {
-                        let raw_json =
-                            String::from_utf8_lossy(&attestation.raw_bytes).to_string();
+                        let raw_json = String::from_utf8_lossy(&attestation.raw_bytes).to_string();
                         match engine.register_sports_fixture_matrix(
                             sport_path,
                             &chosen.event_id,
@@ -350,7 +329,10 @@ async fn run_live_canary(out_path: &str) -> Result<(), String> {
 
     println!("\n=== Live Canary Complete ===");
     println!("  Oracle Authority PubKey : {}", bundle.oracle_pubkey_hex);
-    println!("  General Markets Settled : {}", bundle.general_markets.len());
+    println!(
+        "  General Markets Settled : {}",
+        bundle.general_markets.len()
+    );
     println!(
         "  Sports Matrix Markets   : {}",
         bundle
@@ -365,8 +347,35 @@ async fn run_live_canary(out_path: &str) -> Result<(), String> {
         bundle.ledger.entries.len(),
         hex::encode(bundle.ledger.head_hash())
     );
-    println!("  Saved Portable Bundle   : {} ({} bytes)", out_path, json_bytes.len());
+    println!(
+        "  Saved Portable Bundle   : {} ({} bytes)",
+        out_path,
+        json_bytes.len()
+    );
 
+    Ok(())
+}
+
+fn run_generate_vectors(dir: &str) -> Result<(), String> {
+    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let golden = build_golden_vectors_v1();
+    let golden_path = format!("{}/golden_v1.json", dir);
+    let golden_json = serde_json::to_vec_pretty(&golden).map_err(|e| e.to_string())?;
+    fs::write(&golden_path, &golden_json).map_err(|e| e.to_string())?;
+
+    let sample_bundle = build_deterministic_sample_canary_bundle();
+    verify_canary_bundle(&sample_bundle)?;
+    let sample_path = format!("{}/sample_canary_bundle.json", dir);
+    let sample_json = serde_json::to_vec_pretty(&sample_bundle).map_err(|e| e.to_string())?;
+    fs::write(&sample_path, &sample_json).map_err(|e| e.to_string())?;
+
+    println!(
+        "Generated deterministic golden vectors:\n  -> {} ({} bytes)\n  -> {} ({} bytes)",
+        golden_path,
+        golden_json.len(),
+        sample_path,
+        sample_json.len()
+    );
     Ok(())
 }
 
@@ -380,51 +389,19 @@ fn run_verify_bundle(path: &str) -> Result<(), String> {
 
     println!("  Oracle PubKey : {}", bundle.oracle_pubkey_hex);
 
-    // 1. Verify General Markets
+    verify_canary_bundle(&bundle)?;
+
     for entry in &bundle.general_markets {
-        entry
-            .attestation
-            .verify_integrity()
-            .map_err(|e| format!("[{}] Provenance failure: {}", entry.market_id, e))?;
-
-        let eval_ts = entry
-            .attestation
-            .fetch_timestamp
-            .max(entry.spec.temporal_rules.cutoff_time);
-        let recomputed = verify_resolution_offline(
-            &entry.market_id,
-            &entry.spec,
-            &entry.attestation,
-            eval_ts,
-        )
-        .map_err(|e| format!("[{}] Offline AST verification failure: {}", entry.market_id, e))?;
-
-        if recomputed.outcome != entry.report.outcome
-            || recomputed.payload_commitment != entry.report.payload_commitment
-            || recomputed.evaluated_value != entry.report.evaluated_value
-        {
-            return Err(format!(
-                "[{}] Recomputed report mismatch: expected {:?}, got {:?}",
-                entry.market_id, entry.report, recomputed
-            ));
-        }
-
         println!(
             "  [OK] General Market {:<26} | Outcome={} | Value={:?} | Commitment={}",
             entry.market_id,
-            recomputed.outcome,
-            recomputed.evaluated_value,
-            hex::encode(recomputed.payload_commitment)
+            entry.report.outcome,
+            entry.report.evaluated_value,
+            hex::encode(entry.report.payload_commitment)
         );
     }
 
-    // 2. Verify Multiplexed Sports Fixture Matrix
     if let Some(sports) = &bundle.sports_fixture {
-        let resolver = MultiplexedSportsResolver::default();
-        resolver
-            .verify_report_offline(&sports.attestation, &sports.templates, &sports.report)
-            .map_err(|e| format!("[Sports {}] Offline verification failed: {}", sports.event_id, e))?;
-
         println!(
             "  [OK] Sports Matrix  {:<26} | {} Derivative Verdicts | Merkle={}",
             format!("{}:{}", sports.sport_path, sports.event_id),
@@ -433,11 +410,6 @@ fn run_verify_bundle(path: &str) -> Result<(), String> {
         );
     }
 
-    // 3. Verify Append-Only Hash-Chained AuditLedger
-    bundle
-        .ledger
-        .verify_chain_integrity()
-        .map_err(|e| format!("Ledger chain integrity broken: {}", e))?;
     println!(
         "  [OK] Audit Ledger   {:<26} | {} Chained Entries | Head={}",
         "GENESIS -> HEAD",
@@ -445,10 +417,7 @@ fn run_verify_bundle(path: &str) -> Result<(), String> {
         hex::encode(bundle.ledger.head_hash())
     );
 
-    // 4. Verify 153-Byte On-Chain Settlement Receipts
     for receipt in &bundle.receipts {
-        verify_onchain_receipt(receipt)
-            .map_err(|e| format!("[Receipt {}] Invalid on-chain receipt: {}", receipt.market_id, e))?;
         println!(
             "  [OK] 153B Receipt   {:<26} | Outcome={} | Payout={:?}/{} | Sig Verified",
             receipt.market_id,
@@ -643,7 +612,12 @@ fn run_offline_demo() {
 
     let resolver = MultiplexedSportsResolver::default();
     let sports_report = resolver
-        .resolve_matrix("soccer/eng.1", "401696", &espn_attestation, &matrix.templates)
+        .resolve_matrix(
+            "soccer/eng.1",
+            "401696",
+            &espn_attestation,
+            &matrix.templates,
+        )
         .expect("multiplexed sports resolution");
 
     for v in &sports_report.verdicts {

@@ -2,7 +2,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use super::fixture::{
-     normalize_athlete_name, ConfirmedScoringPlay, MatchLifecycleStatus, NormalizedFixtureState,
+    normalize_athlete_name, ConfirmedScoringPlay, MatchLifecycleStatus, NormalizedFixtureState,
     ParticipationStatus,
 };
 
@@ -348,26 +348,25 @@ impl SportsMarketPredicate {
                 let total = Decimal::from(h_score + a_score);
 
                 // Monotonic early resolution check (if total already strictly exceeds threshold)
-                if total > *threshold {
-                    if is_completed
+                if total > *threshold
+                    && (is_completed
                         || is_aborted
-                        || (is_in_play && config.allow_confirmed_in_play_settlement)
-                    {
-                        return match side {
-                            OverUnderSide::Over => SportsResolutionDecision::ResolvedYes {
-                                explanation: format!(
-                                    "Total score {} exceeded threshold {}",
-                                    total, threshold
-                                ),
-                            },
-                            OverUnderSide::Under => SportsResolutionDecision::ResolvedNo {
-                                explanation: format!(
-                                    "Total score {} exceeded under threshold {}",
-                                    total, threshold
-                                ),
-                            },
-                        };
-                    }
+                        || (is_in_play && config.allow_confirmed_in_play_settlement))
+                {
+                    return match side {
+                        OverUnderSide::Over => SportsResolutionDecision::ResolvedYes {
+                            explanation: format!(
+                                "Total score {} exceeded threshold {}",
+                                total, threshold
+                            ),
+                        },
+                        OverUnderSide::Under => SportsResolutionDecision::ResolvedNo {
+                            explanation: format!(
+                                "Total score {} exceeded under threshold {}",
+                                total, threshold
+                            ),
+                        },
+                    };
                 }
 
                 if is_aborted {
@@ -420,18 +419,18 @@ impl SportsMarketPredicate {
                     Err(reason) => return SportsResolutionDecision::Void { code: 3, reason },
                 };
 
-                if h_score > 0 && a_score > 0 {
-                    if is_completed
+                if h_score > 0
+                    && a_score > 0
+                    && (is_completed
                         || is_aborted
-                        || (is_in_play && config.allow_confirmed_in_play_settlement)
-                    {
-                        return SportsResolutionDecision::ResolvedYes {
-                            explanation: format!(
-                                "Both teams scored (scoped score {}-{})",
-                                h_score, a_score
-                            ),
-                        };
-                    }
+                        || (is_in_play && config.allow_confirmed_in_play_settlement))
+                {
+                    return SportsResolutionDecision::ResolvedYes {
+                        explanation: format!(
+                            "Both teams scored (scoped score {}-{})",
+                            h_score, a_score
+                        ),
+                    };
                 }
 
                 if is_aborted {
@@ -498,7 +497,12 @@ impl SportsMarketPredicate {
                         && fixture.current_clock.base_minute
                             >= max_base_minute + config.var_buffer_minutes);
 
-                if is_completed || (is_in_play && window_passed_in_play && config.allow_confirmed_in_play_settlement) || (is_aborted && window_passed_in_play) {
+                if is_completed
+                    || (is_in_play
+                        && window_passed_in_play
+                        && config.allow_confirmed_in_play_settlement)
+                    || (is_aborted && window_passed_in_play)
+                {
                     return SportsResolutionDecision::ResolvedNo {
                         explanation: format!(
                             "Time window (Period {}, 0..={}m) elapsed with no qualifying goal",
@@ -532,8 +536,8 @@ impl SportsMarketPredicate {
                 let first_non_og = plays.iter().find(|p| !p.is_own_goal).copied();
 
                 // Check athlete participation status from roster
-                let roster_entry =
-                    fixture.find_athlete(athlete.athlete_id.as_deref(), Some(&athlete.athlete_name));
+                let roster_entry = fixture
+                    .find_athlete(athlete.athlete_id.as_deref(), Some(&athlete.athlete_name));
 
                 if let Some(entry) = roster_entry {
                     match participation_policy {
@@ -559,37 +563,35 @@ impl SportsMarketPredicate {
                                 };
                             }
                         }
-                        ParticipationPolicy::MustEnterBeforeFirstGoal => {
-                            match entry.status {
-                                ParticipationStatus::DidNotPlay => {
-                                    if first_non_og.is_some() || is_completed {
-                                        return SportsResolutionDecision::Void {
+                        ParticipationPolicy::MustEnterBeforeFirstGoal => match entry.status {
+                            ParticipationStatus::DidNotPlay => {
+                                if first_non_og.is_some() || is_completed {
+                                    return SportsResolutionDecision::Void {
                                             code: 3,
                                             reason: format!(
                                                 "Athlete '{}' was not on the pitch when first goal was scored (or DNP)",
                                                 entry.display_name
                                             ),
                                         };
-                                    }
                                 }
-                                ParticipationStatus::SubbedIn {
-                                    minute: Some(sub_min),
-                                } => {
-                                    if let Some(fg) = first_non_og {
-                                        if sub_min > fg.clock.base_minute {
-                                            return SportsResolutionDecision::Void {
+                            }
+                            ParticipationStatus::SubbedIn {
+                                minute: Some(sub_min),
+                            } => {
+                                if let Some(fg) = first_non_og {
+                                    if sub_min > fg.clock.base_minute {
+                                        return SportsResolutionDecision::Void {
                                                 code: 3,
                                                 reason: format!(
                                                     "Athlete '{}' subbed in at {}m after first goal at {}m",
                                                     entry.display_name, sub_min, fg.clock.base_minute
                                                 ),
                                             };
-                                        }
                                     }
                                 }
-                                _ => {}
                             }
-                        }
+                            _ => {}
+                        },
                     }
                 }
 
@@ -643,8 +645,8 @@ impl SportsMarketPredicate {
                 participation_policy,
                 scope,
             } => {
-                let roster_entry =
-                    fixture.find_athlete(athlete.athlete_id.as_deref(), Some(&athlete.athlete_name));
+                let roster_entry = fixture
+                    .find_athlete(athlete.athlete_id.as_deref(), Some(&athlete.athlete_name));
 
                 if let Some(entry) = roster_entry {
                     if *participation_policy == ParticipationPolicy::MustStart
@@ -670,23 +672,19 @@ impl SportsMarketPredicate {
                 }
 
                 let plays = scoped_plays(*scope);
-                let player_goals = plays
-                    .iter()
-                    .filter(|p| athlete.matches_play(p))
-                    .count() as u32;
+                let player_goals = plays.iter().filter(|p| athlete.matches_play(p)).count() as u32;
 
-                if player_goals >= *min_goals {
-                    if is_completed
+                if player_goals >= *min_goals
+                    && (is_completed
                         || is_aborted
-                        || (is_in_play && config.allow_confirmed_in_play_settlement)
-                    {
-                        return SportsResolutionDecision::ResolvedYes {
-                            explanation: format!(
-                                "Athlete '{}' scored {} goals (required >= {})",
-                                athlete.athlete_name, player_goals, min_goals
-                            ),
-                        };
-                    }
+                        || (is_in_play && config.allow_confirmed_in_play_settlement))
+                {
+                    return SportsResolutionDecision::ResolvedYes {
+                        explanation: format!(
+                            "Athlete '{}' scored {} goals (required >= {})",
+                            athlete.athlete_name, player_goals, min_goals
+                        ),
+                    };
                 }
 
                 if is_aborted {
@@ -730,27 +728,26 @@ impl SportsMarketPredicate {
                     h_score
                 };
 
-                if opponent_score > 0 {
-                    if is_completed
+                if opponent_score > 0
+                    && (is_completed
                         || is_aborted
-                        || (is_in_play && config.allow_confirmed_in_play_settlement)
-                    {
-                        return if *kept {
-                            SportsResolutionDecision::ResolvedNo {
-                                explanation: format!(
-                                    "Opponent scored {} goals; clean sheet lost",
-                                    opponent_score
-                                ),
-                            }
-                        } else {
-                            SportsResolutionDecision::ResolvedYes {
-                                explanation: format!(
-                                    "Opponent scored {} goals; clean sheet lost condition met",
-                                    opponent_score
-                                ),
-                            }
-                        };
-                    }
+                        || (is_in_play && config.allow_confirmed_in_play_settlement))
+                {
+                    return if *kept {
+                        SportsResolutionDecision::ResolvedNo {
+                            explanation: format!(
+                                "Opponent scored {} goals; clean sheet lost",
+                                opponent_score
+                            ),
+                        }
+                    } else {
+                        SportsResolutionDecision::ResolvedYes {
+                            explanation: format!(
+                                "Opponent scored {} goals; clean sheet lost condition met",
+                                opponent_score
+                            ),
+                        }
+                    };
                 }
 
                 if is_aborted {

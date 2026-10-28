@@ -126,12 +126,9 @@ fn test_failure_mode_2_regulation_90m_vs_extra_time_aet() {
         }
     }"#;
 
-    let fixture = NormalizedFixtureState::from_espn_summary_json(
-        "soccer/uefa.champions",
-        "501",
-        raw_json,
-    )
-    .unwrap();
+    let fixture =
+        NormalizedFixtureState::from_espn_summary_json("soccer/uefa.champions", "501", raw_json)
+            .unwrap();
 
     assert_eq!(
         fixture.lifecycle_status,

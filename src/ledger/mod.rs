@@ -5,19 +5,25 @@ use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum LedgerError {
-    #[error("Ledger sequence number mismatch at index {index}: expected {expected}, found {found}")]
+    #[error(
+        "Ledger sequence number mismatch at index {index}: expected {expected}, found {found}"
+    )]
     SequenceMismatch {
         index: usize,
         expected: u64,
         found: u64,
     },
-    #[error("Ledger previous hash link broken at seq {seq_no}: expected {expected}, found {found}")]
+    #[error(
+        "Ledger previous hash link broken at seq {seq_no}: expected {expected}, found {found}"
+    )]
     BrokenPrevHashLink {
         seq_no: u64,
         expected: String,
         found: String,
     },
-    #[error("Ledger entry hash tampered at seq {seq_no}: computed {computed}, declared {declared}")]
+    #[error(
+        "Ledger entry hash tampered at seq {seq_no}: computed {computed}, declared {declared}"
+    )]
     EntryHashTampered {
         seq_no: u64,
         computed: String,
@@ -94,8 +100,8 @@ impl LedgerEntry {
     ) -> [u8; 32] {
         let mut hasher = Sha256::new();
         hasher.update(b"RAAS_LEDGER_V1:");
-        hasher.update(&seq_no.to_be_bytes());
-        hasher.update(&timestamp.to_be_bytes());
+        hasher.update(seq_no.to_be_bytes());
+        hasher.update(timestamp.to_be_bytes());
         hasher.update(prev_hash);
         let serialized_event = serde_json::to_vec(event).unwrap_or_default();
         hasher.update(&serialized_event);

@@ -1,9 +1,7 @@
 use chrono::Utc;
 use rust_decimal::Decimal;
 
-use resolution_service::ast::{
-    ComparisonOperator, EvaluationContext, Expression,
-};
+use resolution_service::ast::{ComparisonOperator, EvaluationContext, Expression};
 use resolution_service::blueprints::MarketBlueprint;
 use resolution_service::fsm::{
     Bond, EscalationLadder, FsmError, MarketLifecycleState, ResolutionFsm, TemporalRules,
@@ -49,7 +47,10 @@ fn test_controversy_archetype_retroactive_data_revision() {
     // 2. Revision occurs at cutoff + 4000s (past the 3600s freeze window)
     let post_freeze_revision = fsm.evaluate_source_revision(cutoff + 4000, 2);
     assert!(
-        matches!(post_freeze_revision, Err(FsmError::RetroactiveChangeFrozen { .. })),
+        matches!(
+            post_freeze_revision,
+            Err(FsmError::RetroactiveChangeFrozen { .. })
+        ),
         "Revision after freeze deadline MUST be rejected by FSM"
     );
 }
@@ -83,7 +84,8 @@ fn test_controversy_archetype_midflight_schema_drift() {
     );
 
     // Offline verifier must fail-closed with JsonPathError
-    let verification_result = verify_resolution_offline("btc-drift-market", &spec, &attested, cutoff.timestamp());
+    let verification_result =
+        verify_resolution_offline("btc-drift-market", &spec, &attested, cutoff.timestamp());
     assert!(
         matches!(verification_result, Err(VerifierError::AstError(_))),
         "Schema drift must fail-closed with AST error"
@@ -172,7 +174,10 @@ fn test_dispute_escalation_ladder_and_settlement() {
 
     // 3. Challenge window passes without further challenges. Finalize settled outcome.
     let finalized_outcome = fsm.finalize(cutoff + 100 + 3601).unwrap();
-    assert_eq!(finalized_outcome, 2, "Bob's counter-outcome must win upon challenge window expiration");
+    assert_eq!(
+        finalized_outcome, 2,
+        "Bob's counter-outcome must win upon challenge window expiration"
+    );
 
     match fsm.state {
         MarketLifecycleState::Finalized { winning_party, .. } => {

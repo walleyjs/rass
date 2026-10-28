@@ -75,7 +75,9 @@ impl FixtureMarketMatrix {
         };
 
         let scope_label = match default_winner_scope {
-            SettlementScope::RegulationOnly => "in regulation time (90 minutes + injury time, excluding extra time and penalties)",
+            SettlementScope::RegulationOnly => {
+                "in regulation time (90 minutes + injury time, excluding extra time and penalties)"
+            }
             SettlementScope::IncludeOvertime => "including overtime",
             SettlementScope::IncludeShootout => "including extra time and penalty shootouts",
         };

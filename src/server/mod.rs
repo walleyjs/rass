@@ -615,9 +615,7 @@ pub fn build_router(state: Arc<RwLock<RaasEngine>>) -> Router {
         .with_state(state)
 }
 
-async fn handle_list_markets(
-    State(state): State<Arc<RwLock<RaasEngine>>>,
-) -> impl IntoResponse {
+async fn handle_list_markets(State(state): State<Arc<RwLock<RaasEngine>>>) -> impl IntoResponse {
     let engine = state.read().await;
     let list = engine.list_markets();
     (StatusCode::OK, Json(list))
@@ -846,11 +844,12 @@ async fn handle_get_receipt(
     Path(market_id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let engine = state.read().await;
-    let receipt = engine
-        .receipts
-        .get(&market_id)
-        .cloned()
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("No receipt for {}", market_id)))?;
+    let receipt = engine.receipts.get(&market_id).cloned().ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("No receipt for {}", market_id),
+        )
+    })?;
     Ok((StatusCode::OK, Json(receipt)))
 }
 

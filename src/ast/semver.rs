@@ -34,25 +34,31 @@ impl ParsedSemVer {
             return Err(SemVerError::InvalidFormat(s.to_string()));
         }
 
-        let major = parts[0].parse::<u64>().map_err(|e| SemVerError::ParseIntError {
-            component: parts[0].to_string(),
-            source: e,
-        })?;
+        let major = parts[0]
+            .parse::<u64>()
+            .map_err(|e| SemVerError::ParseIntError {
+                component: parts[0].to_string(),
+                source: e,
+            })?;
 
         let minor = if parts.len() > 1 {
-            parts[1].parse::<u64>().map_err(|e| SemVerError::ParseIntError {
-                component: parts[1].to_string(),
-                source: e,
-            })?
+            parts[1]
+                .parse::<u64>()
+                .map_err(|e| SemVerError::ParseIntError {
+                    component: parts[1].to_string(),
+                    source: e,
+                })?
         } else {
             0
         };
 
         let patch = if parts.len() > 2 {
-            parts[2].parse::<u64>().map_err(|e| SemVerError::ParseIntError {
-                component: parts[2].to_string(),
-                source: e,
-            })?
+            parts[2]
+                .parse::<u64>()
+                .map_err(|e| SemVerError::ParseIntError {
+                    component: parts[2].to_string(),
+                    source: e,
+                })?
         } else {
             0
         };

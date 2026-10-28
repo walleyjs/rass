@@ -113,9 +113,7 @@ impl MatchClock {
                 // Case 3: Single minute marker e.g. "23'" or "45"
                 let digits: String = trimmed.chars().filter(|c| c.is_ascii_digit()).collect();
                 if let Ok(mins) = digits.parse::<u32>() {
-                    let secs = raw_seconds
-                        .map(|s| s.round() as u32)
-                        .unwrap_or(mins * 60);
+                    let secs = raw_seconds.map(|s| s.round() as u32).unwrap_or(mins * 60);
                     return Self {
                         period: effective_period,
                         base_minute: mins,
@@ -268,9 +266,7 @@ impl NormalizedFixtureState {
         let root: JsonValue = serde_json::from_str(raw_json)
             .map_err(|e| FixtureParseError::InvalidJson(e.to_string()))?;
 
-        let header = root
-            .get("header")
-            .ok_or(FixtureParseError::MissingHeader)?;
+        let header = root.get("header").ok_or(FixtureParseError::MissingHeader)?;
         let comps = header
             .get("competitions")
             .and_then(|c| c.as_array())
@@ -492,14 +488,8 @@ impl NormalizedFixtureState {
                 .unwrap_or("");
             let ptype_lower = ptype_text.to_lowercase();
 
-            let text = play
-                .get("text")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let short_text = play
-                .get("shortText")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let text = play.get("text").and_then(|v| v.as_str()).unwrap_or("");
+            let short_text = play.get("shortText").and_then(|v| v.as_str()).unwrap_or("");
             let text_lower = text.to_lowercase();
             let short_lower = short_text.to_lowercase();
 
@@ -568,10 +558,7 @@ impl NormalizedFixtureState {
 
                 let dedup_key = format!(
                     "{}:{}:{}:{}",
-                    play_clock.period,
-                    play_clock.base_minute,
-                    play_clock.stoppage_minute,
-                    play_id
+                    play_clock.period, play_clock.base_minute, play_clock.stoppage_minute, play_id
                 );
                 if !seen_play_keys.insert(dedup_key) {
                     continue;
@@ -625,7 +612,7 @@ impl NormalizedFixtureState {
             }
         }
 
-        confirmed_scoring_plays.sort_by(|a, b| a.clock.cmp(&b.clock));
+        confirmed_scoring_plays.sort_by_key(|a| a.clock);
 
         // If fixture went to overtime/shootout without explicit linescores, derive regulation vs OT from play periods
         if matches!(
@@ -750,8 +737,7 @@ impl NormalizedFixtureState {
                             let status = if is_starter {
                                 ParticipationStatus::Started
                             } else if is_subbed_in {
-                                let minute =
-                                    substituted_in_athletes.get(&aid).copied().flatten();
+                                let minute = substituted_in_athletes.get(&aid).copied().flatten();
                                 ParticipationStatus::SubbedIn { minute }
                             } else {
                                 ParticipationStatus::DidNotPlay
@@ -827,11 +813,9 @@ impl NormalizedFixtureState {
         if let Some(name) = athlete_name {
             let norm = normalize_athlete_name(name);
             if !norm.is_empty() {
-                if let Some(found) = self
-                    .athletes
-                    .iter()
-                    .find(|a| a.normalized_name.contains(&norm) || norm.contains(&a.normalized_name))
-                {
+                if let Some(found) = self.athletes.iter().find(|a| {
+                    a.normalized_name.contains(&norm) || norm.contains(&a.normalized_name)
+                }) {
                     return Some(found);
                 }
             }

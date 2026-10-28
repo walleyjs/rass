@@ -105,10 +105,26 @@ cargo run -- live-canary --out /tmp/live_canary.json
 ### 4.3 Air-Gapped Offline Bundle Verification (`verify-bundle`)
 Verifies a captured `LiveCanaryBundle` JSON file **100% offline** (recomputing SHA-256 payload hashes, Ed25519 signatures, AST/Sports evaluations, Merkle report commitments, every `AuditLedger` hash link from `GENESIS_HASH`, and every 153-byte `SettlementReceipt`):
 ```bash
+# Verify the committed deterministic sample bundle (zero network calls):
+cargo run -- verify-bundle vectors/sample_canary_bundle.json
+
+# Or verify a freshly captured live canary bundle:
 cargo run -- verify-bundle /tmp/live_canary.json
 ```
 
-### 4.4 Start the Live RaaS HTTP Server (`serve`)
+### 4.4 Cross-Language Golden Test Vectors (`vectors/golden_v1.json`)
+For smart-contract and SDK integrators (Solana Anchor, EVM Solidity, TypeScript, Go), [`vectors/golden_v1.json`](vectors/golden_v1.json) provides deterministic test vectors generated from seed `[0x42; 32]` covering:
+- `AttestedPayload` commitment hashing & Ed25519 signatures.
+- 153-byte `SettlementReceipt` wire buffers (`to_wire_bytes()` hex) for `YES (1)`, `NO (2)`, and `VOID (3)`.
+- `AuditLedger` sequential SHA-256 hash-chaining from `GENESIS_HASH` (`[0u8; 32]`).
+
+To regenerate or verify bit-for-bit reproducibility:
+```bash
+cargo run -- generate-vectors vectors
+cargo test --test golden_vectors_test
+```
+
+### 4.5 Start the Live RaaS HTTP Server (`serve`)
 ```bash
 # Start on port 8080 and automatically seed live crypto, weather, GitHub, and ESPN markets:
 cargo run -- serve --port 8080 --seed-live

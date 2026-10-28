@@ -1,10 +1,10 @@
 pub mod http;
 pub mod mock;
 
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ProvenanceError {
@@ -18,8 +18,13 @@ pub enum ProvenanceError {
     MissingHeader(String),
     #[error("Provider network error: {0}")]
     NetworkError(String),
-    #[error("Timestamp outside acceptable drift: delta {delta_seconds}s > allowed {allowed_seconds}s")]
-    TimestampDriftExceeded { delta_seconds: i64, allowed_seconds: i64 },
+    #[error(
+        "Timestamp outside acceptable drift: delta {delta_seconds}s > allowed {allowed_seconds}s"
+    )]
+    TimestampDriftExceeded {
+        delta_seconds: i64,
+        allowed_seconds: i64,
+    },
     #[error("Attestation kind unsupported or corrupt: {0}")]
     UnsupportedAttestation(String),
 }
@@ -77,9 +82,9 @@ impl AttestedPayload {
         let mut hasher = Sha256::new();
         hasher.update(b"RESOLUTION_SERVICE_ATTESTATION_V1:");
         hasher.update(self.source_url.as_bytes());
-        hasher.update(&self.fetch_timestamp.to_be_bytes());
-        hasher.update(&self.payload_sha256);
-        
+        hasher.update(self.fetch_timestamp.to_be_bytes());
+        hasher.update(self.payload_sha256);
+
         // Canonical headers commitment
         for (k, v) in &self.canonical_headers {
             hasher.update(k.as_bytes());
@@ -87,7 +92,7 @@ impl AttestedPayload {
             hasher.update(v.as_bytes());
             hasher.update(b"\n");
         }
-        
+
         let res = hasher.finalize();
         let mut out = [0u8; 32];
         out.copy_from_slice(&res);
@@ -112,38 +117,57 @@ impl AttestedPayload {
         let commitment = self.commitment_hash();
 
         match &self.attestation {
-            AttestationEnvelope::Ed25519Authority { authority_pubkey, signature } => {
+            AttestationEnvelope::Ed25519Authority {
+                authority_pubkey,
+                signature,
+            } => {
                 let verifying_key = VerifyingKey::from_bytes(authority_pubkey)
                     .map_err(|e| ProvenanceError::InvalidPublicKey(e.to_string()))?;
-                
+
                 let sig = Signature::from_slice(signature)
                     .map_err(|e| ProvenanceError::InvalidSignature(e.to_string()))?;
-                
-                verifying_key.verify(&commitment, &sig)
+
+                verifying_key
+                    .verify(&commitment, &sig)
                     .map_err(|e| ProvenanceError::InvalidSignature(e.to_string()))?;
             }
-            AttestationEnvelope::NitroEnclave { enclave_pubkey, enclave_signature, pcr0, .. } => {
+            AttestationEnvelope::NitroEnclave {
+                enclave_pubkey,
+                enclave_signature,
+                pcr0,
+                ..
+            } => {
                 if pcr0.is_empty() {
-                    return Err(ProvenanceError::UnsupportedAttestation("Missing PCR0 measurement".into()));
+                    return Err(ProvenanceError::UnsupportedAttestation(
+                        "Missing PCR0 measurement".into(),
+                    ));
                 }
                 let verifying_key = VerifyingKey::from_bytes(enclave_pubkey)
                     .map_err(|e| ProvenanceError::InvalidPublicKey(e.to_string()))?;
                 let sig = Signature::from_slice(enclave_signature)
                     .map_err(|e| ProvenanceError::InvalidSignature(e.to_string()))?;
-                verifying_key.verify(&commitment, &sig)
+                verifying_key
+                    .verify(&commitment, &sig)
                     .map_err(|e| ProvenanceError::InvalidSignature(e.to_string()))?;
             }
-            AttestationEnvelope::TlsNotarySession { notary_pubkey, notary_signature, server_name, .. } => {
+            AttestationEnvelope::TlsNotarySession {
+                notary_pubkey,
+                notary_signature,
+                server_name,
+                ..
+            } => {
                 if !self.source_url.contains(server_name) {
-                    return Err(ProvenanceError::UnsupportedAttestation(
-                        format!("Server name '{}' not in source URL '{}'", server_name, self.source_url)
-                    ));
+                    return Err(ProvenanceError::UnsupportedAttestation(format!(
+                        "Server name '{}' not in source URL '{}'",
+                        server_name, self.source_url
+                    )));
                 }
                 let verifying_key = VerifyingKey::from_bytes(notary_pubkey)
                     .map_err(|e| ProvenanceError::InvalidPublicKey(e.to_string()))?;
                 let sig = Signature::from_slice(notary_signature)
                     .map_err(|e| ProvenanceError::InvalidSignature(e.to_string()))?;
-                verifying_key.verify(&commitment, &sig)
+                verifying_key
+                    .verify(&commitment, &sig)
                     .map_err(|e| ProvenanceError::InvalidSignature(e.to_string()))?;
             }
         }

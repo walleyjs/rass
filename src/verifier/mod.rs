@@ -13,9 +13,15 @@ pub enum VerifierError {
     #[error("Source URL mismatch: expected '{expected}', attested '{attested}'")]
     SourceUrlMismatch { expected: String, attested: String },
     #[error("Attestation timestamp {attested_time} occurred before event cutoff {cutoff_time}")]
-    PrematureAttestation { attested_time: i64, cutoff_time: i64 },
+    PrematureAttestation {
+        attested_time: i64,
+        cutoff_time: i64,
+    },
     #[error("Attestation timestamp {attested_time} exceeds future clock skew against current time {current_time}")]
-    FutureTimestamp { attested_time: i64, current_time: i64 },
+    FutureTimestamp {
+        attested_time: i64,
+        current_time: i64,
+    },
     #[error("AST evaluation failure: {0}")]
     AstError(#[from] AstError),
     #[error("Evaluated outcome is not boolean: {0}")]
@@ -47,7 +53,10 @@ pub fn verify_resolution_offline(
 
     // 2. Canonical URL validation
     let is_canonical_source = attestation.source_url == spec.primary_source_url
-        || spec.secondary_source_urls.iter().any(|u| u == &attestation.source_url);
+        || spec
+            .secondary_source_urls
+            .iter()
+            .any(|u| u == &attestation.source_url);
 
     if !is_canonical_source {
         return Err(VerifierError::SourceUrlMismatch {
@@ -77,7 +86,9 @@ pub fn verify_resolution_offline(
     let ctx = EvaluationContext::new(raw_text);
 
     let evaluated = spec.ast_expression.evaluate(&ctx)?;
-    let outcome_bool = evaluated.as_bool().map_err(|e| VerifierError::NonBooleanOutcome(e.to_string()))?;
+    let outcome_bool = evaluated
+        .as_bool()
+        .map_err(|e| VerifierError::NonBooleanOutcome(e.to_string()))?;
 
     let outcome_code = if outcome_bool { 1 } else { 2 };
 
